@@ -92,7 +92,6 @@ runs:
               "uniq *":            "allow",
               "tree":              "allow",
               "tree *":            "allow",
-              "echo *":            "allow",
               "git log":           "allow",
               "git log *":         "allow",
               "git diff":          "allow",
