@@ -42,6 +42,7 @@ jobs:
     permissions:
       contents: read
       issues: write
+      pull-requests: write
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       # Set the env var that matches your model's provider (see README).
