@@ -39,22 +39,84 @@ runs:
         curl -fsSL https://opencode.ai/install | bash
         echo "$HOME/.opencode/bin" >> "$GITHUB_PATH"
 
+    - name: Scrub project-level opencode config
+      shell: bash
+      run: |
+        # opencode's config precedence puts project files above our env-var
+        # config, so a malicious PR could ship opencode.json (or
+        # opencode.jsonc, or a .opencode/ directory with agents) with
+        # permissive rules that override every restriction below. Remove
+        # any such files from the workspace before opencode starts.
+        rm -f opencode.json opencode.jsonc
+        rm -rf .opencode
+
     - name: Write opencode permission config
       shell: bash
       env:
         REVIEW_FILE: ${{ inputs.review-file }}
       run: |
         REVIEW_BASENAME=$(basename "$REVIEW_FILE")
-        # Lock opencode down to read-only code exploration plus a single
+        # Lock opencode down to a curated read-only surface plus a single
         # writable file for the review output. See README "Security model".
+        #
         # Never use "ask" here — opencode run is non-interactive and hangs
         # silently on ask prompts. doom_loop and external_directory default
         # to "ask", which is why they're explicitly denied below.
+        #
+        # bash: catch-all deny with an explicit allow list for read-only
+        # utilities, read-only git, and read-only gh subcommands. Deliberately
+        # NOT allowing `gh api` (can hit POST/PATCH/DELETE) or any gh write
+        # subcommand (pr create/edit/review/comment/merge, issue create/edit/
+        # close/comment, etc.).
         cat > /tmp/opencode-config.json <<JSON
         {
           "\$schema": "https://opencode.ai/config.json",
           "permission": {
-            "bash":              { "*": "deny" },
+            "bash": {
+              "*":                 "deny",
+              "grep":              "allow",
+              "grep *":            "allow",
+              "rg":                "allow",
+              "rg *":              "allow",
+              "cat *":             "allow",
+              "ls":                "allow",
+              "ls *":              "allow",
+              "pwd":               "allow",
+              "head *":            "allow",
+              "tail *":            "allow",
+              "wc *":              "allow",
+              "find *":            "allow",
+              "file *":            "allow",
+              "which *":           "allow",
+              "sort *":            "allow",
+              "uniq *":            "allow",
+              "tree":              "allow",
+              "tree *":            "allow",
+              "git log":           "allow",
+              "git log *":         "allow",
+              "git diff":          "allow",
+              "git diff *":        "allow",
+              "git show *":        "allow",
+              "git branch":        "allow",
+              "git branch *":      "allow",
+              "git status":        "allow",
+              "git status *":      "allow",
+              "git blame *":       "allow",
+              "git rev-parse *":   "allow",
+              "git ls-files":      "allow",
+              "git ls-files *":    "allow",
+              "gh pr view *":      "allow",
+              "gh pr diff *":      "allow",
+              "gh pr list":        "allow",
+              "gh pr list *":      "allow",
+              "gh pr checks *":    "allow",
+              "gh issue view *":   "allow",
+              "gh issue list":     "allow",
+              "gh issue list *":   "allow",
+              "gh repo view":      "allow",
+              "gh repo view *":    "allow"
+            },
+            "read":              { "*": "allow", ".git/**": "deny", "**/.git/**": "deny" },
             "edit":              { "*": "deny", "${REVIEW_BASENAME}": "allow" },
             "webfetch":          "deny",
             "websearch":         "deny",
