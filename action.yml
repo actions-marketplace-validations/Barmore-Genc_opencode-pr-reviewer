@@ -27,6 +27,10 @@ inputs:
     description: 'URL of the workflow run for the "starting review" link. Defaults to the current run.'
     required: false
     default: ''
+  post-start-comment:
+    description: 'Post a "Starting review…" comment when the run begins. Reviews take a few minutes, so the default keeps users from thinking the bot is broken. Set to `false` to post only the final review comment.'
+    required: false
+    default: 'true'
 
 runs:
   using: composite
@@ -137,6 +141,7 @@ runs:
       run: '"${{ github.action_path }}/scripts/opencode-review-prompt.sh" > /tmp/opencode-prompt.txt'
 
     - name: Post starting comment
+      if: inputs.post-start-comment != 'false'
       shell: bash
       env:
         PR_NUMBER: ${{ inputs.pr-number }}

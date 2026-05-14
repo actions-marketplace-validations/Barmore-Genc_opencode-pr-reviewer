@@ -39,6 +39,7 @@ For other providers, see the [opencode provider docs](https://opencode.ai/docs/p
 | `user-comment`     | no       | `''`                             | Pass `${{ github.event.comment.body }}` so reviewer guidance after `/oc review` is forwarded to the model. |
 | `review-file`      | no       | `./opencode-review.md`           | Where opencode writes the review. Path is also added to the permission config's edit allow-list. |
 | `workflow-run-url` | no       | current run                      | Override only if you're wrapping this in something custom. |
+| `post-start-comment` | no     | `true`                           | Set to `false` to skip the "Starting review…" comment and post only the final review. The default keeps users from thinking the bot is stuck during the few-minute run. |
 
 The action expects these env vars to be set by the calling job:
 
