@@ -39,32 +39,27 @@ runs:
         curl -fsSL https://opencode.ai/install | bash
         echo "$HOME/.opencode/bin" >> "$GITHUB_PATH"
 
-    - name: Write opencode permission config
+    - name: Scrub project-level opencode config
       shell: bash
-      env:
-        REVIEW_FILE: ${{ inputs.review-file }}
       run: |
-        REVIEW_BASENAME=$(basename "$REVIEW_FILE")
-        # Lock opencode down to read-only code exploration plus a single
-        # writable file for the review output. See README "Security model".
-        # Never use "ask" here — opencode run is non-interactive and hangs
-        # silently on ask prompts. doom_loop and external_directory default
-        # to "ask", which is why they're explicitly denied below.
-        cat > /tmp/opencode-config.json <<JSON
-        {
-          "\$schema": "https://opencode.ai/config.json",
-          "permission": {
-            "bash":              { "*": "deny" },
-            "edit":              { "*": "deny", "${REVIEW_BASENAME}": "allow" },
-            "webfetch":          "deny",
-            "websearch":         "deny",
-            "task":              "deny",
-            "external_directory":"deny",
-            "doom_loop":         "deny"
-          }
-        }
-        JSON
-        echo "OPENCODE_CONFIG=/tmp/opencode-config.json" >> "$GITHUB_ENV"
+        # opencode's config precedence puts project files above our env-var
+        # config, so a malicious PR could ship opencode.json (or
+        # opencode.jsonc, or a .opencode/ directory with agents) with
+        # permissive rules that override every restriction below. Remove
+        # any such files from the workspace before opencode starts.
+        rm -f opencode.json opencode.jsonc
+        rm -rf .opencode
+
+    # TEMPORARILY DISABLED: running opencode with no permission config at
+    # all to isolate whether the config is what's stripping bash from the
+    # model's tool roster.
+    #
+    # - name: Write opencode permission config
+    #   shell: bash
+    #   env:
+    #     REVIEW_FILE: ${{ inputs.review-file }}
+    #   run: |
+    #     ...
 
     - name: Generate review prompt
       shell: bash
