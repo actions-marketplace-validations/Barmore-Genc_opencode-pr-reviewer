@@ -50,14 +50,14 @@ The action expects these env vars to be set by the calling job:
 
 This action runs an LLM coding agent on the PR content. This can be risky: the PR may contain untrusted content, and secrets like `GH_TOKEN` and the AI provider's API key are present in the environment. We mitigate this risk with the following:
 
-1. `opencode` is run with restricted permissions, tools like `bash`, `webfetch`, `websearch` and more are denied. The agent can only read, and write its review.
-2. The prompt given to the agent explicitly frames PR content as data and not instructions.
-3. Example workflow file:
-   a. Restricts the triggers to the repository owner and collaborators, and organization members. This prevents untrusted outsiders from triggering the workflow.
-   b. Uses `pull_request` over `pull_request_target`, so fork PRs run without access to repo secrets (see [`pull_request` vs `pull_request_target`](#pull_request-vs-pull_request_target) below).
-   c. Does not re-trigger a review on every push to avoid unnecessary re-reviews and token waste. Follow-up reviews must be triggered explicitly via a comment.
+1. `opencode` runs with restricted permissions: tools like `bash`, `webfetch`, and `websearch` are denied. The agent can only read files and write its review.
+2. The prompt given to the agent explicitly frames PR content as data, not instructions.
+3. The example workflow file:
+   - Restricts the triggers to the repository owner, collaborators, and organization members. This prevents untrusted outsiders from triggering the workflow.
+   - Uses `pull_request` over `pull_request_target`, so fork PRs run without access to repo secrets (see [`pull_request` vs `pull_request_target`](#pull_request-vs-pull_request_target) below).
+   - Does not re-trigger a review on every push, to avoid unnecessary re-reviews and token waste. Follow-up reviews must be triggered explicitly via a comment.
 
-It's important to note that the review verdict is still open to potential prompt injection, a malicious PR can convince the AI agent to approve the PR when it shouldn't. If you don't trust the PR contents, you should not trust the approval you get from the agent either.
+Note that the review verdict is still open to prompt injection: a malicious PR can convince the agent to approve when it shouldn't. If you don't trust the PR contents, don't trust the agent's approval either.
 
 ## Customization
 
