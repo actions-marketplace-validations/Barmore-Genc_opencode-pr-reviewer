@@ -1,0 +1,95 @@
+name: opencode-review
+description: Run an opencode-powered code review on a pull request and post the verdict as a comment.
+branding:
+  icon: message-square
+  color: purple
+
+inputs:
+  model:
+    description: 'opencode model string, e.g. `deepseek/deepseek-v4-pro` or `anthropic/claude-sonnet-4-6`. The corresponding provider API key env var (e.g. `DEEPSEEK_API_KEY`, `ANTHROPIC_API_KEY`) must be set in the calling job''s env.'
+    required: true
+  pr-number:
+    description: 'Pull request number to review.'
+    required: true
+  opencode-version:
+    description: 'Pin a specific opencode version (passed as `OPENCODE_VERSION` to the install script). Default: latest. Pinning is recommended for production use.'
+    required: false
+    default: ''
+  user-comment:
+    description: 'Body of the triggering comment, if any. Used to extract optional reviewer guidance after `/oc review`.'
+    required: false
+    default: ''
+  review-file:
+    description: 'Path where opencode writes the review (relative to the workspace).'
+    required: false
+    default: './opencode-review.md'
+  workflow-run-url:
+    description: 'URL of the workflow run for the "starting review" link. Defaults to the current run.'
+    required: false
+    default: ''
+
+runs:
+  using: composite
+  steps:
+    - name: Install opencode CLI
+      shell: bash
+      env:
+        OPENCODE_VERSION: ${{ inputs.opencode-version }}
+      run: |
+        curl -fsSL https://opencode.ai/install | bash
+        echo "$HOME/.opencode/bin" >> "$GITHUB_PATH"
+
+    - name: Write opencode permission config
+      shell: bash
+      env:
+        REVIEW_FILE: ${{ inputs.review-file }}
+      run: |
+        REVIEW_BASENAME=$(basename "$REVIEW_FILE")
+        # Lock opencode down to read-only code exploration plus a single
+        # writable file for the review output. See README "Security model".
+        # Never use "ask" here — opencode run is non-interactive and hangs
+        # silently on ask prompts. doom_loop and external_directory default
+        # to "ask", which is why they're explicitly denied below.
+        cat > /tmp/opencode-config.json <<JSON
+        {
+          "\$schema": "https://opencode.ai/config.json",
+          "permission": {
+            "bash":              { "*": "deny" },
+            "edit":              { "*": "deny", "${REVIEW_BASENAME}": "allow" },
+            "webfetch":          "deny",
+            "websearch":         "deny",
+            "task":              "deny",
+            "external_directory":"deny",
+            "doom_loop":         "deny"
+          }
+        }
+        JSON
+        echo "OPENCODE_CONFIG=/tmp/opencode-config.json" >> "$GITHUB_ENV"
+
+    - name: Generate review prompt
+      shell: bash
+      env:
+        PR_NUMBER: ${{ inputs.pr-number }}
+        USER_COMMENT: ${{ inputs.user-comment }}
+        REVIEW_FILE: ${{ inputs.review-file }}
+      run: '"${{ github.action_path }}/scripts/opencode-review-prompt.sh" > /tmp/opencode-prompt.txt'
+
+    - name: Post starting comment
+      shell: bash
+      env:
+        PR_NUMBER: ${{ inputs.pr-number }}
+        WORKFLOW_RUN_URL: ${{ inputs.workflow-run-url != '' && inputs.workflow-run-url || format('{0}/{1}/actions/runs/{2}', github.server_url, github.repository, github.run_id) }}
+      run: '"${{ github.action_path }}/scripts/opencode-review-start-comment.sh"'
+
+    - name: Run opencode review
+      shell: bash
+      run: opencode run --model "${{ inputs.model }}" "$(cat /tmp/opencode-prompt.txt)"
+
+    - name: Post review
+      if: always()
+      shell: bash
+      env:
+        PR_NUMBER: ${{ inputs.pr-number }}
+        REVIEW_FILE: ${{ inputs.review-file }}
+        WORKFLOW_RUN_URL: ${{ inputs.workflow-run-url != '' && inputs.workflow-run-url || format('{0}/{1}/actions/runs/{2}', github.server_url, github.repository, github.run_id) }}
+      run: '"${{ github.action_path }}/scripts/opencode-review-post.sh"'

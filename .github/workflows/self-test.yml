@@ -1,0 +1,76 @@
+name: self-test
+
+# Runs this action against this repo's own PRs as a smoke test.
+# Mirrors examples/opencode-review.yml but uses the local action via `uses: ./`.
+
+on:
+  pull_request:
+    types: [opened, reopened, ready_for_review, synchronize]
+  issue_comment:
+    types: [created]
+
+jobs:
+  review:
+    if: |
+      (
+        github.event_name == 'pull_request' &&
+        (
+          github.event.pull_request.author_association == 'OWNER' ||
+          github.event.pull_request.author_association == 'MEMBER' ||
+          github.event.pull_request.author_association == 'COLLABORATOR'
+        ) &&
+        !contains(github.event.pull_request.body, '/no-bot-review')
+      ) ||
+      (
+        github.event_name == 'issue_comment' &&
+        github.event.issue.pull_request != null &&
+        (
+          contains(github.event.comment.body, ' /oc review') ||
+          startsWith(github.event.comment.body, '/oc review') ||
+          contains(github.event.comment.body, ' /opencode review') ||
+          startsWith(github.event.comment.body, '/opencode review')
+        ) &&
+        (
+          github.event.comment.author_association == 'OWNER' ||
+          github.event.comment.author_association == 'MEMBER' ||
+          github.event.comment.author_association == 'COLLABORATOR'
+        )
+      )
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          submodules: true
+          persist-credentials: false
+          fetch-depth: 0
+
+      - if: github.event_name == 'issue_comment'
+        run: gh pr checkout "${{ github.event.issue.number }}" --repo "$GITHUB_REPOSITORY"
+
+      - uses: ./
+        with:
+          model: deepseek/deepseek-v4-pro
+          pr-number: ${{ github.event.pull_request.number || github.event.issue.number }}
+          user-comment: ${{ github.event.comment.body }}
+
+      - name: Assert review artifact shape
+        if: always()
+        run: |
+          set -euo pipefail
+          if [ ! -s ./opencode-review.md ]; then
+            echo "FAIL: opencode-review.md missing or empty" >&2
+            exit 1
+          fi
+          if ! grep -qE '^### Overall \((Approve|Request changes|Comment)\)' ./opencode-review.md; then
+            echo "FAIL: review file does not start with a recognized verdict header" >&2
+            echo "--- review file ---" >&2
+            cat ./opencode-review.md >&2
+            exit 1
+          fi
+          echo "OK: review artifact looks well-formed."
