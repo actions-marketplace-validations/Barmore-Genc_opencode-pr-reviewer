@@ -47,21 +47,16 @@ The action expects these env vars to be set by the calling job:
 
 ## Security model
 
-This action runs an autonomous LLM coding agent on PR content with `GH_TOKEN` and an LLM API key in its process environment. That's the classic "pwn request" shape: trusted workflow definition, untrusted PR content, sensitive tokens in env. Without care, prompt-injection content planted in source files, docstrings, or commit messages could cause the agent to shell out, exfiltrate secrets, post fraudulent reviews, or modify the working tree.
+This action runs an LLM coding agent on the PR content. This can be risky as the PR may have untrusted content, and secrets like `GH_TOKEN` and API key for the AI provider. We mitigate this risk with the following:
 
-The action mitigates this with **defense in depth**:
+1. `opencode` is run with restricted permissions, tools like `bash`, `webfetch`, `websearch` and more are denied. The agent can only read, and write its review.
+2. The prompt given to the agent explicitly frames PR content as data and not instructions.
+3. Example workflow file:
+   a. Restricts the triggers to the repository owner and collaborators, and organization members. This prevents untrusted outsiders from triggering the workflow.
+   b. Only triggers on `pull_request`, meaning PRs from external repositories will not trigger the workflow.
+   c. Does not re-trigger a review on every push to avoid unnecessary re-reviews and token waste. Follow-up reviews must be triggered explicitly via a comment.
 
-1. **opencode is run with a locked-down permission config** written to `/tmp/opencode-config.json` at the start of the job. `bash`, `edit` (except for the review file), `webfetch`, `websearch`, `task`, `external_directory`, and `doom_loop` are all denied. The agent can only `read`, `grep`, and `glob`, plus write the single review file.
-2. **The calling workflow grants `issues: write` only** — no `pull-requests: write`, so the agent token can't approve, dismiss, or edit reviews even if the agent goes rogue.
-3. **`pull_request` (not `pull_request_target`) trigger.** Fork PRs run without secrets, so even if the `author_association` gate were somehow bypassed, the API key wouldn't be in the environment and opencode would fail at startup.
-4. **`author_association` gate** restricts both auto and manual triggers to `OWNER`, `MEMBER`, and `COLLABORATOR`.
-5. **The action's scripts are loaded from the pinned ref of this repo**, so a PR can't substitute the review scripts at runtime. Pin to a release tag (e.g. `@v1`) or a SHA — both work; SHA pinning additionally protects against tag-mutation attacks if you don't trust the action's maintainer.
-6. **The prompt explicitly frames PR content as data, not instructions**, with `<pr-description>` / `<pr-comments>` delimiters. This is best-effort hardening, not a security boundary — the permission config above is the real boundary.
-
-### Residual risks worth knowing about
-
-- **The review verdict is attacker-controlled output.** A malicious PR can convince opencode to write `### Overall (Approve)` followed by a benign-looking summary. The bot's verdict is advisory — treat code from untrusted sources with the same scrutiny you would without it.
-- **Prompt content reaches the LLM provider.** opencode sends the PR title, description, comments, and any code the agent reads to your chosen provider. If your code or PR discussions are sensitive, factor that in when picking a model.
+It's important to note that the review verdict is still open to potential prompt injection, a malicious PR can convince the AI agent to approve the PR when it shouldn't. If you don't trust the PR contents, you should not trust the approval you get from the agent either.
 
 ## Customization
 
