@@ -2,10 +2,12 @@
 
 A GitHub Action that runs an [opencode](https://opencode.ai)-powered code review on a pull request and posts the verdict as a single comment that's edited as the run progresses.
 
-- Reviews on PR open, reopen, or `ready_for_review`.
+- Reviews when a PR is opened, reopened, or marked ready for review.
 - Re-review on demand by commenting `/oc review` or `/opencode review` on the PR.
 - Opt out of auto-review per-PR with `/no-bot-review` in the description.
 - Works with any LLM provider opencode supports — DeepSeek, Anthropic, OpenAI, Google, etc.
+
+All of the above (events, trigger phrases, skip marker) live in the example workflow file and are meant to be edited — see [Customization](#customization).
 
 ## Quick start
 
@@ -34,7 +36,7 @@ For other providers, see the [opencode provider docs](https://opencode.ai/docs/p
 | Input              | Required | Default                          | Notes |
 |--------------------|----------|----------------------------------|-------|
 | `model`            | yes      | —                                | e.g. `deepseek/deepseek-v4-pro`. |
-| `pr-number`        | yes      | —                                | Use `${{ github.event.pull_request.number || github.event.issue.number }}`. |
+| `pr-number`        | yes      | —                                | Use <code>${{ github.event.pull_request.number &#124;&#124; github.event.issue.number }}</code>. |
 | `opencode-version` | no       | `''` (latest)                    | Passed to the installer as `OPENCODE_VERSION`. Pin for reproducibility. |
 | `user-comment`     | no       | `''`                             | Pass `${{ github.event.comment.body }}` so reviewer guidance after `/oc review` is forwarded to the model. |
 | `review-file`      | no       | `./opencode-review.md`           | Where opencode writes the review. Path is also added to the permission config's edit allow-list. |
